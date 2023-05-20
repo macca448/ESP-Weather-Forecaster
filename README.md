@@ -16,7 +16,7 @@ Changes and improvemnts by [Ralph McCleery](https://github.com/macca448)
   7.  This sketch is configured to use a BMP280 for Barometric Pressure and Room Temperature.
   8.  Two hardware configurations tested with this sketch: 
       * ESP8266 with I2C SSD1306
-      * ESP32 with SPI SSD1309
+      * ESP32 with SPI SSD1309  (Use the SSD1306Spi driver)
   9.  Sketch was tested using:
       * Arduino IDE v1.8.19 and v2.1.0              (v2.1.0 shows some incorrect "unused parameter" warnings. You can ignore them)
       * ESP8266 v3.1.2 (Generic) board profile
