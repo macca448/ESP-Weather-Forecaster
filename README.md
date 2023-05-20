@@ -2,12 +2,11 @@
 
 ESP8266 or ESP32 Weather Forecaster using 128 x 64 OLED Display
 
-The Original Author of the Weather Prediction Methods used in this sketch is David Bird
-[http://g6ejd.dynu.com](<http://g6ejd.dynu.com/>) or [https://github.com/G6EJD](<http://g6ejd.dynu.com/>)
+Original author [David Bird](<http://g6ejd.dynu.com/>)
 
-### 
+Changes and improvemnts by [Ralph McCleery](https://github.com/macca448)
 
-### The following lists changes made:
+### Changes list:
   1.  NTP time method is in full compliance with NTP ORG "[Terms of Service](https://www.ntppool.org/tos.html)"
   2.  The WiFi connection is only used to update time. At all other times the WiFi is disconnected and the radio is turned Off.
   3.  Screen No.6 has a Time stamp for the last NTP sync so it's easy to know when things aren't working as they should
