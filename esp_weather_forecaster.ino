@@ -23,29 +23,30 @@
 ///////////////////////////////////////////////////      ABOUT THIS SKETCH      ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  Original Author of the Weather Prediction Methods used in this sketch David Bird
-  <http://g6ejd.dynu.com/> or <https://github.com/G6EJD>
+  This sketch is a modifyed version of David Bird's ESP32-Weather-Forecaster  <https://github.com/G6EJD/ESP32-Weather-Forecaster>
+  or <http://g6ejd.dynu.com/micro-controllers/esp32/esp32-weather-forecaster/>
 
-  This sketch is a re-work of the above and facilitates the following
-    #1  NTP time method is in full compliance with NTP ORG "Terms of Service" https://www.ntppool.org/tos.html
-    #2  A WiFi connection is only used to update and re sync time. WiFi and Radio Off at all other times
-    #3  There is "(S or F) Last Sync" time stamp on screen 6 (S = Success, F = Fail)
+  Modifications in this sketch provide improved stability and functionality.
+    CHANGE LIST:
+    #1  NTP time method is in full compliance with NTP ORG's "Terms of Service" https://www.ntppool.org/tos.html
+    #2  The WiFi connection is only used to do NTP update. WiFi and Radio are Off at all other times
+    #3  There is a "Last Sync" time stamp on screen 6 below the temperature reading
     #4  Sketch will auto determin your ESP board type (ESP32 or ESP8266)
-    #5  The "FLASH" button (GPIO0) has been used for screen "WAKE"
-    #6  "Manditory" user settings are maked "// ! "
-    #7  This sketch is using the BMP280 for Barometric Pressure and Room Temperature
+    #5  The "FLASH" button (GPIO0) has been used for the screen "WAKE" function.
+    #6  "Manditory" user settings are maked with " ! "
+    #7  This sketch is configured to use a BMP280 for Barometric Pressure and Temperature
     #8  Sketch has been tested using
           i.    Arduino IDE v1.8.19 and v2.1.0              (v2.1.0 shows some incorrect "unused parameter" warnings. You can ignor them)
           ii.   ESP8266 v3.1.2 (Generic)
           iii.  ESP32   v2.0.9 (Generic)
           iv.   Adafruit BMP280 Library v2.6.6              (Chinese Clones may need you to change the default address to 0x76 in Adafruit_BMP280.h on line:34)
-          v.    ThingPulse v4.4.0 OLED
+          v.    ThingPulse v4.4.0 OLED Library
           NOTE: All libraries are available via Arduino IDE Library Manager
 
     #9  For information on <sys/time.h> "strftime" function https://cplusplus.com/reference/ctime/strftime/
     #10 NTP Timezone POSIX string database https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
-    This sketch has been tested on ESP8266 with and I2C SSD1306 and ESP32 with SPI SSD1309
+    This sketch has been tested on an ESP8266 with a I2C SSD1306 OLED and on a ESP32 with SPI SSD1309 OLED display.
 
     HOW THIS SKETCH WORKS:
     1. On boot your controller starts two constant clocks "millis()" and "micros()"
@@ -54,13 +55,13 @@
     4. If your "Posix" string supports it the time will be auto-corrected for "Dailight Savings Time (DST)" start and end.
     5. The ESP's don't need time to be corrected for drift any shorter than one hour and you'd find doing it daily would be more than enough
     6. A Time re sync only occurs when the screen is OFF. You'll see the on-board LED blinking indicating time update in progress.
-    7. As noted above there is a "Last Sync" time stamp on page 6 under the temperature display
+    7. As noted above there is a "Last Sync" time stamp on page 6 under the temperature display. Makes it easy to see if things gone wrong
     8. To further adhere to NTP ORG's "Terms of Service" a randomness has been used as per their recommendations.
-    9. The screen turns off after 3 minutes. You can adjust this in "USER SETTINGS".
+    9. The screen turns off after 3 minutes. You can adjust this in the "USER SETTINGS" below.
     Note that there is a "Duty" period for a shared timer statement. 50mS provides the denounce for the button so to calculate
-    the screen time-out macro it is "duration = count * 50" or  3 minutes = "3600 * 50 or 180,000mS"
+    the screen time-out it is "duration = count * 50" or  3 minutes = "3600" being (3600 * 50 = 180,000mS)
     If you want say a 5 minute screen OFF period it would be (5 * 60 * 60 * 1000 /50) = 6000 (#define SCREEN_SLEEP 6000)
-    10. To "WAKE" the screen press the "FLASH" button on your ESP Dev Board
+    10. To "WAKE" the screen press the "FLASH / BOOT" button on your ESP Dev Board
 
 */
 
@@ -147,11 +148,11 @@ Adafruit_BMP280 bmp;   //BMP Sensor object
 const bool  look_3hr = true, look_1hr = false;
 
 uint8_t     lastSecond, current_second, last_reading_hour, current_hour, hr_cnt = 0,
-            current_minute, blinkCount = 0, ledState = ON, ntp_sync_hour, random_minute;
+            current_minute, blinkCount = 0, ntp_sync_hour, random_minute;
 uint16_t    timeout = 0;
 int16_t     wx_average_1hr, wx_average_3hr; // Indicators of average weather
 bool        modePress = false, modeState, lastModeState = HIGH,
-            screenON = true, blink = false, updateLED = true;
+            screenON = true, blink = false, ledState = OFF, updateLED = false;
 String      weather_text, weather_extra_text, time_str, sync_stamp;
 uint32_t    previousTime = 0, remainingTimeBudget;
 int32_t     update_epoch, previous_epoch = 1609459200;        //1st Jan 2021 00:00:00 so we know we get a true epoch at update time
@@ -526,35 +527,51 @@ void time_data_update(void){
   return; 
 }
 
-void doNTP(void){
+bool doNTP(void){
     delay(500);
     #ifdef PRINT
       Serial.printf("\nConnecting to WiFi %s ", ssid);
     #endif
+    uint8_t wifiTimeOut = 0;
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     WiFi.setAutoReconnect(false);
     while(WiFi.status() != WL_CONNECTED){
+      wifiTimeOut++;
       #ifdef PRINT
         Serial.print(".");
       #endif
       delay(250);
+        if(wifiTimeOut >= 80){            //20 second Wifi non-connection time-out
+          #ifdef PRINT
+            Serial.printf("\nFailed to connect to %s\n", ssid);
+          #endif
+          return false;
+        }
     }
     #ifdef PRINT
       Serial.print("\nIP address: ");Serial.println(WiFi.localIP());
       Serial.println("\nWiFi Connected.....");
       Serial.println("Getting NTP Time Update");
     #endif
+    uint8_t ntpTimeOut = 0;
     time_t now = time(nullptr); 
     struct tm *now_tm;
     now = time(NULL);
     update_epoch = 0;
     while(update_epoch < previous_epoch){
+      ntpTimeOut++;
       #if defined (ARDUINO_ARCH_ESP8266)  
         now_tm = localtime(&now);
       #endif
         update_epoch = time(&now);
         delay(500);                     //Small delay needed or we miss the packet
+        if(ntpTimeOut >= 40){           //20 Second NTP Sync time-out
+          #ifdef PRINT
+            Serial.println("\nFailed to do NTP Update");
+          #endif
+          return false;
+        }
     }
     #if defined (ARDUINO_ARCH_ESP32)
         now_tm = localtime(&now);       //Converts UTC "Epoch" to local time based on POSIX string supplied
@@ -585,10 +602,18 @@ void doNTP(void){
       sync_stamp = "Last Sync: ";
       sync_stamp += ntp_stamp;
       delay(500);
+        #ifdef PRINT
+          Serial.println("NTP Update Successful!\n");
+        #endif
+        return true;
     }else{
+      #ifdef PRINT
+        Serial.println("NTP Epoch Update Failed\nWe will try again in an hour");
+      #endif
+      ntp_sync_hour += 1;
       sync_stamp ="Resync Fail!";
+      return false;
     }
-    return;
 }
 
 void setup() { 
@@ -601,7 +626,20 @@ void setup() {
   randomSeed(analogRead(RAN_PIN));                        //To generate a random minute for NTP resync
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");      //Configure one of two NTP server address's
   setenv("TZ", TZ_INFO, 1); tzset();                      //Setup your Timezone for true local time incl. DST changes 
-  doNTP();
+  
+  bool success = doNTP();
+  if(!success){
+    #ifdef PRINT
+      Serial.print("Restarting ESP device in: ");
+    #endif
+    for(uint8_t i = 6; i >= 0; i--){
+      #ifdef PRINT
+      Serial.print(i + " ");
+      #endif
+      delay(1000);
+    }
+    ESP.restart();
+  }
   
   if (!bmp.begin()){ 
     #ifdef PRINT
@@ -649,7 +687,6 @@ void setup() {
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-
   digitalWrite(LED, OFF);
 }
 
@@ -687,10 +724,15 @@ void loop() {
           }  //NTP update only when screen is off and on a random minute chosen on the last update
           if(ntp_sync_hour != current_hour && current_minute >= random_minute){       //Very random indeed to comply with pool.ntp.org
             blink = true;                                                             //Provides a visual that NTP is being Updated
-            doNTP();                                                                  //this does the deed!
-            ledState = OFF;
-            blink = false;
-            updateLED = true;
+            bool success = doNTP();                                                   //this does the deed!
+              if(success){
+                ledState = OFF;
+                blink = false;
+                updateLED = true;
+              }else{
+                // This will never happen!!
+                // If it does then we have BIG trouble!!
+              }
           }
         }else if(screenON){
           timeout++;
