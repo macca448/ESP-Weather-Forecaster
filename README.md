@@ -51,7 +51,7 @@ Changes and improvemnts by [Ralph McCleery](https://github.com/macca448)
 ![I2C ESP32 SSD1306](https://github.com/macca448/ESP_Weather_Predictor/blob/main/esp_weather_predictor/assets/ESP32_OLED_I2C.png)
 
 
-### Wiring Guide ESP32 I2C SSD1306
+### Wiring Guide ESP32 SPI SSD1309
 ![SPI ESP32 SSD1309](https://github.com/macca448/ESP_Weather_Predictor/blob/main/esp_weather_predictor/assets/OLED_SPI_BMP_ESP32.png)
 
 
