@@ -23,30 +23,30 @@
 ///////////////////////////////////////////////////      ABOUT THIS SKETCH      ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  This sketch is a modifyed version of David Bird's ESP32-Weather-Forecaster  <https://github.com/G6EJD/ESP32-Weather-Forecaster>
+  This sketch is a modifyed version of David Bird's  <https://github.com/G6EJD/ESP32-Weather-Forecaster>
   or <http://g6ejd.dynu.com/micro-controllers/esp32/esp32-weather-forecaster/>
 
-  Modifications in this sketch provide improved stability and functionality.
-    CHANGE LIST:
-    #1  NTP time method is in full compliance with NTP ORG's "Terms of Service" https://www.ntppool.org/tos.html
-    #2  The WiFi connection is only used to do NTP update. WiFi and Radio are Off at all other times
-    #3  There is a "Last Sync" time stamp on screen 6 below the temperature reading
+  Modifications I have done greatly improve the performance and stability and are as follows:
+ 
+    #1  NTP time method is in full compliance with NTP ORG "Terms of Service" https://www.ntppool.org/tos.html
+    #2  A WiFi connection is only used to update and re sync time. WiFi and Radio Off at all other times
+    #3  There is "Last Sync" time stamp on screen 6 below the temperature reading
     #4  Sketch will auto determin your ESP board type (ESP32 or ESP8266)
-    #5  The "FLASH" button (GPIO0) has been used for the screen "WAKE" function.
+    #5  The "FLASH" button (GPIO0) has been used for a screen "WAKE" function.
     #6  "Manditory" user settings are maked with " ! "
-    #7  This sketch is configured to use a BMP280 for Barometric Pressure and Temperature
+    #7  This sketch is configured to use a BMP280 for Barometric Pressure and Room Temperature
     #8  Sketch has been tested using
           i.    Arduino IDE v1.8.19 and v2.1.0              (v2.1.0 shows some incorrect "unused parameter" warnings. You can ignor them)
           ii.   ESP8266 v3.1.2 (Generic)
           iii.  ESP32   v2.0.9 (Generic)
           iv.   Adafruit BMP280 Library v2.6.6              (Chinese Clones may need you to change the default address to 0x76 in Adafruit_BMP280.h on line:34)
-          v.    ThingPulse v4.4.0 OLED Library
+          v.    ThingPulse v4.4.0 OLED
           NOTE: All libraries are available via Arduino IDE Library Manager
 
     #9  For information on <sys/time.h> "strftime" function https://cplusplus.com/reference/ctime/strftime/
     #10 NTP Timezone POSIX string database https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
-    This sketch has been tested on an ESP8266 with a I2C SSD1306 OLED and on a ESP32 with SPI SSD1309 OLED display.
+    This sketch has been tested on ESP8266 with and I2C SSD1306 and ESP32 with SPI SSD1309
 
     HOW THIS SKETCH WORKS:
     1. On boot your controller starts two constant clocks "millis()" and "micros()"
@@ -55,7 +55,7 @@
     4. If your "Posix" string supports it the time will be auto-corrected for "Dailight Savings Time (DST)" start and end.
     5. The ESP's don't need time to be corrected for drift any shorter than one hour and you'd find doing it daily would be more than enough
     6. A Time re sync only occurs when the screen is OFF. You'll see the on-board LED blinking indicating time update in progress.
-    7. As noted above there is a "Last Sync" time stamp on page 6 under the temperature display. Makes it easy to see if things gone wrong
+    7. As noted above there is a "Last Sync" time stamp on page 6 under the temperature display
     8. To further adhere to NTP ORG's "Terms of Service" a randomness has been used as per their recommendations.
     9. The screen turns off after 3 minutes. You can adjust this in the "USER SETTINGS" below.
     Note that there is a "Duty" period for a shared timer statement. 50mS provides the denounce for the button so to calculate
@@ -69,8 +69,8 @@
 ///////////////////////////////////////////////////////////   USER SETTINGS   /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define MY_SSID       "Your_WiFi_SSID"                    // ! Enter Your WiFi SSID Details
-#define MY_PASS       "Your_WiFi_Password"                // ! Enter Your WiFi Password
+#define MY_SSID       "Your_SSID"                         // ! Enter Your WiFi SSID Details
+#define MY_PASS       "Your_Password"                     // ! Enter Your WiFi Password
 
 //#define PRINT                                           // Uncomment to use Serial Print for de-bugging or to get a Serial Monitor Clock
 
@@ -81,7 +81,7 @@
 #define PAGE_TIME     7000                                // The duration each OLED page is displayed
 #define TRANS_TIME    750                                 // The duration to change to the next page
 #define FPS           20                                  // OLED Display Frame Rate
-#define BLINK_RATE    5                                   // Blink LED for the NTP Update (250mS) blink rate 
+#define BLINK_RATE    2                                   // Blink LED for the NTP Update (250mS) blink rate 
 
 #define WAKE_PIN      0                                   // Wake display or zero display off time-out counter
 #define RAN_PIN       A0                                  // To generate a random minute to sync NTP
@@ -151,10 +151,10 @@ uint8_t     lastSecond, current_second, last_reading_hour, current_hour, hr_cnt 
             current_minute, blinkCount = 0, ntp_sync_hour, random_minute;
 uint16_t    timeout = 0;
 int16_t     wx_average_1hr, wx_average_3hr; // Indicators of average weather
-bool        modePress = false, modeState, lastModeState = HIGH,
+bool        modePress = false, modeState, lastModeState = HIGH, sleepHB = false,
             screenON = true, blink = false, ledState = OFF, updateLED = false;
 String      weather_text, weather_extra_text, time_str, sync_stamp;
-uint32_t    previousTime = 0, remainingTimeBudget;
+uint32_t    previousTime = 0, remainingTimeBudget, startMillis;
 int32_t     update_epoch, previous_epoch = 1609459200;        //1st Jan 2021 00:00:00 so we know we get a true epoch at update time
 
 char ssid[]     = MY_SSID;
@@ -601,17 +601,17 @@ bool doNTP(void){
       previous_epoch = update_epoch;
       sync_stamp = "Last Sync: ";
       sync_stamp += ntp_stamp;
-      delay(500);
-        #ifdef PRINT
-          Serial.println("NTP Update Successful!\n");
-        #endif
+      #ifdef PRINT
+        Serial.println("NTP Update Successful!\n");
+      #endif
+        delay(500);
         return true;
     }else{
       #ifdef PRINT
-        Serial.println("NTP Epoch Update Failed\nWe will try again in an hour");
+        Serial.println("NTP Epoch Update Failed\nWe will try again in an hour");        
       #endif
-      ntp_sync_hour += 1;
       sync_stamp ="Resync Fail!";
+      ntp_sync_hour += 1;
       return false;
     }
 }
@@ -687,7 +687,6 @@ void setup() {
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  digitalWrite(LED, OFF);
 }
 
 void loop() {
@@ -711,6 +710,7 @@ void loop() {
         if(!screenON){
           if(modePress){
             if(modeState == LOW){                  
+              sleepHB = false;
               timeout = 0;
               display.resetDisplay();
               display.displayOn();
@@ -737,11 +737,13 @@ void loop() {
         }else if(screenON){
           timeout++;
             if(timeout >= SCREEN_SLEEP){
+              display.clear();
               display.displayOff();
               blink = false;
               ledState = OFF;
               updateLED = true;
               screenON = false;
+              sleepHB = true;
             }
         }
         if(blink){
@@ -751,6 +753,17 @@ void loop() {
               ledState = !ledState;
               updateLED = true;
             }
+        }
+        if(sleepHB){
+            updateTime();
+              if(current_second != lastSecond){
+                 startMillis = millis();
+                 digitalWrite(LED, ON);
+                 lastSecond = current_second;
+              }
+              if(millis() - startMillis >= 100){
+                 digitalWrite(LED, OFF);
+              }
         }
         if(updateLED){
           digitalWrite(LED, ledState);
