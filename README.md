@@ -6,6 +6,11 @@ Original author [David Bird](<http://g6ejd.dynu.com/>)
 
 Changes and improvemnts by [Ralph McCleery](https://github.com/macca448)
 
+#### UPDATE 03/06/2022
+> Added a second sketch `esp32time_weather_predictor.ino` that is configured with the `BME280` using an `SPI SSD1306 OLED` and will only work on the `ESP32` as it uses the `ESP32Time` library, the native `ESP32 time_t` functions and it has been `dual core threaded`.
+
+> Original sketch `esp_weather_forecaster.ino` uses `<sys/time.h>` and `tmelements` default C++ time libraries and is configured for `SSD1306 I2C OLED` and the `BMP280` weather sensor and will compile one both the `ESP32` and `ESP8266`.
+
 ### Changes list:
   1.  NTP time method is in full compliance with NTP ORG "[Terms of Service](https://www.ntppool.org/tos.html)"
   2.  The WiFi connection is only used to update time. At all other times the WiFi is disconnected and the radio is turned Off.
