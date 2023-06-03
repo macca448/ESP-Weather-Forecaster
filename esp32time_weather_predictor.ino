@@ -47,11 +47,14 @@
     #10 NTP Timezone POSIX string database https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
     This sketch has been tested on ESP8266 with and I2C SSD1306 and ESP32 with SPI SSD1309
+    
+    This sketch use's "ESP32Time.h" library and the native ESP32 "time_t" Libraries
+    NOTE: This sketch is configured for BME280 sensor and SPI SSD1306 OLED
 
     HOW THIS SKETCH WORKS:
     1. On boot your controller starts two constant clocks "millis()" and "micros()"
-    2. We then connect to WiFi and get an NTP "Unix epoch" time update.
-    3. <sys/time.h> then use's your "Posix" string  to convert the GMT/UDP "epoch" to your local time in sync with your controllers millis() clock
+    2. We then connect to WiFi and get an NTP "Unix epoch" time update
+    3. "ESP32Time" use's the "Posix" string  to convert the GMT/UDP "epoch" to your local time in sync with your controllers millis() clock
     4. If your "Posix" string supports it the time will be auto-corrected for "Dailight Savings Time (DST)" start and end.
     5. The ESP's don't need time to be corrected for drift any shorter than one hour and you'd find doing it daily would be more than enough
     6. A Time re sync only occurs when the screen is OFF. You'll see the on-board LED blinking indicating time update in progress.
@@ -69,8 +72,8 @@
 ///////////////////////////////////////////////////////////   USER SETTINGS   /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define MY_SSID       "MillFlat_El_Rancho"                // ! Enter Your WiFi SSID Details
-#define MY_PASS       "140824500925"                      // ! Enter Your WiFi Password
+#define MY_SSID       "Your_SSID"                         // ! Enter Your WiFi SSID Details
+#define MY_PASS       "Your_WiFi_Password"                // ! Enter Your WiFi Password
 
 //#define PRINT                                           // Uncomment to use Serial Print for de-bugging or to get a Serial Monitor Clock
 
