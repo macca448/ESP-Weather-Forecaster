@@ -86,7 +86,7 @@
 #define FPS           20                                  // OLED Display Frame Rate
 #define BLINK_RATE    2                                   // Blink LED for the NTP Update (250mS) blink rate 
 
-#define WAKE_PIN      35                                  // Wake display or zero display off time-out counter
+#define WAKE_PIN      39                                  // Wake display or zero display off time-out counter
 #define RAN_PIN       A0                                  // To generate a random minute to sync NTP
 #define RAN_MIN       3
 #define RAN_MAX       11
@@ -151,13 +151,13 @@ const bool  look_3hr = true, look_1hr = false;
 String      weather_text, weather_extra_text;
 
 struct STRUCT2{
+  int32_t lastEpoch = 1609459200;
   uint32_t previousTime = 0; 
   uint16_t timeout = 0;
   uint8_t lastSecond;
   uint8_t last_reading_hour;
   uint8_t sync_hour;
   uint8_t randomMinute;
-  uint8_t myDay;
   uint8_t blinkCount = 0;
   bool modePress = false;
   bool modeState;
@@ -508,7 +508,7 @@ bool doNTP(){
   uint8_t t_out = 0;
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   setenv("TZ", TZ_INFO, 1); tzset(); 
-  while(epoch < 1609459200){          //Wait till the NTP server reponds    
+  while(epoch < core_2.lastEpoch){          //Wait till the NTP server reponds    
     epoch = time(&now);               //Gets the current Unix UTC/GMT time
     t_out++;
     delay(250);
@@ -517,6 +517,7 @@ bool doNTP(){
       }
   }
   rtc.setTime(epoch);
+  core_2.lastEpoch = epoch;
   core_2.randomMinute = random(RAN_MIN, RAN_MAX);
   core_2.sync_hour = rtc.getHour();
   core_2.lastSecond = rtc.getSecond();
@@ -570,7 +571,7 @@ void loop2(void *pvParameters){    // Core 1 loop - User tasks
           if(core_2.modePress){
             if(core_2.modeState == LOW){                  
               core_2.timeout = 0;
-              //display.resetDisplay();
+              display.resetDisplay();
               display.displayOn();
               ui.enableAutoTransition();
               ui.setAutoTransitionForwards();
@@ -606,15 +607,16 @@ void loop2(void *pvParameters){    // Core 1 loop - User tasks
         }
         core_2.previousTime = millis();
       }
-      if(core_2.sync_hour != rtc.getHour() && core_2.randomMinute >= rtc.getMinute()){
+      if(core_2.sync_hour != rtc.getHour()){
+        if(core_2.randomMinute >= rtc.getMinute()){
           bool success = doNTP();
             if(!success){
               core_2.sync_stamp = getSyncStamp(0);
               core_2.sync_hour = rtc.getHour();
             }else{
-              core_2.myDay = rtc.getDay();
               core_2.sync_stamp = getSyncStamp(1);
             }
+        }
       }
     core_2.lastModeState = core_2.modeState;
     delay(1);
@@ -663,10 +665,8 @@ void setup() {
     }
   bool success = doNTP();
     if(!success){
-      core_2.sync_stamp = getSyncStamp(0);
-      core_2.sync_hour = rtc.getHour();
+      ESP.restart();
     }else{
-      core_2.myDay = rtc.getDay();
       core_2.sync_stamp = getSyncStamp(1);
     }
 
