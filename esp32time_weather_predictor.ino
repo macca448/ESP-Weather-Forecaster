@@ -47,14 +47,11 @@
     #10 NTP Timezone POSIX string database https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
     This sketch has been tested on ESP8266 with and I2C SSD1306 and ESP32 with SPI SSD1309
-    
-    This sketch use's "ESP32Time.h" library and the native ESP32 "time_t" Libraries
-    NOTE: This sketch is configured for BME280 sensor and SPI SSD1306 OLED
 
     HOW THIS SKETCH WORKS:
     1. On boot your controller starts two constant clocks "millis()" and "micros()"
-    2. We then connect to WiFi and get an NTP "Unix epoch" time update
-    3. "ESP32Time" use's the "Posix" string  to convert the GMT/UDP "epoch" to your local time in sync with your controllers millis() clock
+    2. We then connect to WiFi and get an NTP "Unix epoch" time update.
+    3. <sys/time.h> then use's your "Posix" string  to convert the GMT/UDP "epoch" to your local time in sync with your controllers millis() clock
     4. If your "Posix" string supports it the time will be auto-corrected for "Dailight Savings Time (DST)" start and end.
     5. The ESP's don't need time to be corrected for drift any shorter than one hour and you'd find doing it daily would be more than enough
     6. A Time re sync only occurs when the screen is OFF. You'll see the on-board LED blinking indicating time update in progress.
@@ -72,8 +69,8 @@
 ///////////////////////////////////////////////////////////   USER SETTINGS   /////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define MY_SSID       "Your_SSID"                         // ! Enter Your WiFi SSID Details
-#define MY_PASS       "Your_WiFi_Password"                // ! Enter Your WiFi Password
+#define MY_SSID       "MillFlat_El_Rancho"                // ! Enter Your WiFi SSID Details
+#define MY_PASS       "140824500925"                      // ! Enter Your WiFi Password
 
 //#define PRINT                                           // Uncomment to use Serial Print for de-bugging or to get a Serial Monitor Clock
 
@@ -82,14 +79,13 @@
 #define TZ_INFO       "NZST-12NZDT,M9.5.0,M4.1.0/3"       // ! POSIX TimeZone String see item #10 above
 #define SCREEN_SLEEP  3600                                // This creates a screen 3 minute timeout (3600 x 50mS = 180,000mS /1000/60 = 3 minutes
 #define PAGE_TIME     5000                                // The duration each OLED page is displayed
-#define TRANS_TIME    350                                 // The duration to change to the next page
+#define TRANS_TIME    400                                 // The duration to change to the next page
 #define FPS           20                                  // OLED Display Frame Rate
-#define BLINK_RATE    2                                   // Blink LED for the NTP Update (250mS) blink rate 
 
 #define WAKE_PIN      39                                  // Wake display or zero display off time-out counter
 #define RAN_PIN       A0                                  // To generate a random minute to sync NTP
-#define RAN_MIN       3
-#define RAN_MAX       11
+#define RAN_MIN       71
+#define RAN_MAX       87
 
 // ! Only For 128 x 64 OLED SSD1306 or SH1106 Displays
 // ! Uncomment the correct screen connection type 
@@ -151,22 +147,19 @@ const bool  look_3hr = true, look_1hr = false;
 String      weather_text, weather_extra_text;
 
 struct STRUCT2{
-  int32_t lastEpoch = 1609459200;
-  uint32_t previousTime = 0; 
-  uint16_t timeout = 0;
-  uint8_t lastSecond;
-  uint8_t last_reading_hour;
-  uint8_t sync_hour;
-  uint8_t randomMinute;
-  uint8_t blinkCount = 0;
-  bool modePress = false;
-  bool modeState;
-  bool lastModeState = HIGH;
-  bool screenON = true;
-  bool blink = false;
-  bool ledState = OFF;
-  bool updateLED = false;
-  String sync_stamp = "";
+  int32_t   lastEpoch = 1609459200;
+  uint32_t  previousTime = 0; 
+  uint16_t  timeout = 0;
+  uint8_t   lastSecond;
+  uint8_t   last_reading_hour;
+  uint8_t   minCount;
+  uint8_t   lastMinute;
+  uint8_t   randomMinute;
+  bool      modePress = false;
+  bool      modeState;
+  bool      lastModeState = HIGH;
+  bool      screenON = true;
+  String    sync_stamp = "";
 }core_2;
 
 struct STRUCT1{
@@ -519,7 +512,7 @@ bool doNTP(){
   rtc.setTime(epoch);
   core_2.lastEpoch = epoch;
   core_2.randomMinute = random(RAN_MIN, RAN_MAX);
-  core_2.sync_hour = rtc.getHour();
+  core_2.lastMinute = rtc.getMinute();
   core_2.lastSecond = rtc.getSecond();
   return true;
 }
@@ -535,8 +528,8 @@ String getSyncStamp(bool success){
   return stamp;
 }
 
-void time_data_update(void){
-  if (rtc.getHour(true) != core_2.last_reading_hour) { // If the hour has advanced, then shift readings left and record new values at array element [23]    
+void data_update(void){  
+   // If the hour has advanced, then shift readings left and record new values at array element [23]    
     for (int i = 0; i < 23;i++){
       reading[i].pressure     = reading[i+1].pressure;
       reading[i].temperature  = reading[i+1].temperature;
@@ -552,14 +545,11 @@ void time_data_update(void){
     for (int i=23;i >= 21; i--){                                      // Used to predict 3-hour forecast extra text 
       core_1.wx_average_3hr = core_1.wx_average_3hr + (int)reading[i].wx_state_3hr; // On average the last 3-hours of weather is used for the 'no change' forecast - e.g. more of the same?
     }
-    core_2.last_reading_hour = rtc.getHour(true);
-  } 
   return; 
 }
 
 void loop2(void *pvParameters){    // Core 1 loop - User tasks
   while (1){
-    time_data_update();                                 //True every hour roll
     core_2.modeState = digitalRead(WAKE_PIN); 
       if(core_2.modeState != core_2.lastModeState){
         core_2.previousTime = millis();
@@ -577,46 +567,40 @@ void loop2(void *pvParameters){    // Core 1 loop - User tasks
               ui.setAutoTransitionForwards();
               display.clear();
               core_2.screenON = true;
-              core_2.ledState = ON;
-              core_2.updateLED = true;                      
+              digitalWrite(LED, ON);                      
             }
             core_2.modePress = false;
-          }  //NTP update only when screen is off and on a random minute chosen on the last update
+          }
         }else if(core_2.screenON){
           core_2.timeout++;
             if(core_2.timeout >= SCREEN_SLEEP){
               display.clear();
               display.displayOff();
-              core_2.blink = false;
-              core_2.ledState = OFF;
-              core_2.updateLED = true;
               core_2.screenON = false;
+              digitalWrite(LED, OFF);
             }
-        }
-        if(core_2.blink){
-          core_2.blinkCount++;
-            if(core_2.blinkCount >= BLINK_RATE){
-              core_2.blinkCount = 0;
-              core_2.ledState = !core_2.ledState;
-              core_2.updateLED = true;
-            }
-        }
-        if(core_2.updateLED){
-          digitalWrite(LED, core_2.ledState);
-          core_2.updateLED = false;
         }
         core_2.previousTime = millis();
       }
-      if(core_2.sync_hour != rtc.getHour()){
-        if(core_2.randomMinute >= rtc.getMinute()){
-          bool success = doNTP();
-            if(!success){
-              core_2.sync_stamp = getSyncStamp(0);
-              core_2.sync_hour = rtc.getHour();
-            }else{
-              core_2.sync_stamp = getSyncStamp(1);
-            }
-        }
+      if(rtc.getMinute() != core_2.lastMinute){
+        core_2.minCount++;
+        core_2.lastMinute = rtc.getMinute();
+      }
+      if(core_2.minCount >= core_2.randomMinute){
+        digitalWrite(LED, ON);
+        bool success = doNTP();
+          if(!success){
+            core_2.sync_stamp = getSyncStamp(0);
+            core_2.randomMinute = random(RAN_MIN, RAN_MAX);
+          }else{
+            core_2.sync_stamp = getSyncStamp(1);
+          }
+          core_2.minCount = 0;
+          digitalWrite(LED, OFF);
+      }
+      if (rtc.getHour(true) != core_2.last_reading_hour) {
+        core_2.last_reading_hour = rtc.getHour(true);
+        data_update();
       }
     core_2.lastModeState = core_2.modeState;
     delay(1);
